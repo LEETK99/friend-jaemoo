@@ -49,8 +49,8 @@ def train(args):
         from models.discriminator import Discriminator_large
         netD = Discriminator_large(nc = args.num_channels, ngf = args.ngf, act=nn.LeakyReLU(0.2)).to(device)
     '''
-    from models.discriminator_copy import Discriminator
-    netD = Discriminator().to(device)
+    from models.discriminator_copy import Discriminator, Discriminator2
+    netD = Discriminator2().to(device)
     optimizerD = optim.Adam(netD.parameters(), lr=args.lr_d, betas = (args.beta1, args.beta2))
     schedulerD = torch.optim.lr_scheduler.CosineAnnealingLR(optimizerD, args.schedule, eta_min=1e-5)
     netD = nn.DataParallel(netD)
@@ -73,6 +73,7 @@ def train(args):
         split='train',
         scale_mode=args.scale_mode,
     )
+    
     val_dset = ShapeNetCore(
         path=args.dataset_path,
         cates=args.categories,
@@ -133,9 +134,9 @@ def train(args):
             # real D loss
             #noise = torch.randn_like(real_data)   
             noise = torch.tensor(partial, dtype=torch.float).to(device, non_blocking=True)
-            print(real_data.shape) 
             noise.requires_grad = True
             D_real = netD(real_data)
+            
             #print(D_real)
             errD_real = phi_star2(-D_real)
             errD_real = errD_real.mean()
@@ -152,12 +153,9 @@ def train(args):
             # fake D loss
             #latent_z = torch.randn(batch_size, nz, device=device)
             _, x_0_predict = netG(noise) # , latent_z)
-            print('1', x_0_predict.shape)
             D_fake = netD(x_0_predict)
-            print('2', noise.shape) 
-            assert 0       
             #errD_fake = phi_star1(D_fake - args.tau * torch.sum(((x_0_predict-noise).view(noise.size(0), -1))**2, dim=1))
-            errD_fake = phi_star1(- args.tau * cd_loss_L1(x_0_predict, noise) + D_fake)
+            errD_fake = phi_star1(-0.5 * args.tau * cd_loss_L1(x_0_predict, noise) + D_fake)
             errD_fake = errD_fake.mean()
             errD_fake.backward()
             errD = errD_real + errD_fake
